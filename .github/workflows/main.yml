@@ -1,28 +1,8 @@
-name: Test Puppeteer
-
-on:
-  workflow_dispatch:
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Chrome
+      - name: Start server
         run: |
-          sudo apt-get update
-          sudo apt-get install -y google-chrome-stable
+          node app.js &
+          sleep 5
 
-      - name: Install Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 18
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Run parser
-        run: node app.js
+      - name: Test parser
+        run: |
+          curl "http://localhost:51888/parse?url=https://m.yichengwlkj.com/pc/drama/41068?episodeNo=1"
