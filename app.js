@@ -1,5 +1,5 @@
-import express from "express";
-import puppeteer from "puppeteer";
+const express = require("express");
+const puppeteer = require("puppeteer");
 
 const app = express();
 const port = 51888;
@@ -33,13 +33,11 @@ app.get("/", async (req, res) => {
             }
         });
 
-        // 等待资源加载
         await page.waitForTimeout(5000);
         await browser.close();
 
         if (!realUrl) return res.send("未找到播放链接");
 
-        // ⭐ 关键：TVBox 类型 1 需要纯文本 URL
         return res.send(realUrl);
 
     } catch (err) {
