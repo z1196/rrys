@@ -24,19 +24,22 @@ app.get('/parse', async (req, res) => {
 
     let realUrl = null;
 
+    // 1. 监听所有 response
     page.on("response", async (response) => {
       try {
         const url = response.url();
         const type = response.request().resourceType();
 
-        // 直接命中 mp4/m3u8
         if (!realUrl && (url.includes(".mp4") || url.includes(".m3u8"))) {
           realUrl = url;
-          return;
         }
 
-        // 命中 JSON XHR
-        if (!realUrl && type === "xhr" && url.includes("/api/")) {
+        if (!realUrl && type === "media") {
+          realUrl = url;
+        }
+
+        const ct = response.headers()["content-type"] || "";
+        if (!realUrl && ct.includes("application/json")) {
           const text = await response.text();
           const match = text.match(/https?:\/\/[^\s"'\\]+/);
           if (match) realUrl = match[0];
@@ -45,11 +48,62 @@ app.get('/parse', async (req, res) => {
       } catch (e) {}
     });
 
+    // 2. Hook fetch
+    await page.evaluateOnNewDocument(() => {
+      const origFetch = window.fetch;
+      window.fetch = async (...args) => {
+        const res = await origFetch(...args);
+        res.clone().text().then(t => {
+          const m = t.match(/https?:\/\/[^\s"'\\]+/);
+          if (m) window.__REAL_URL__ = m[0];
+        });
+        return res;
+      };
+    });
+
+    // 3. Hook XHR
+    await page.evaluateOnNewDocument(() => {
+      const open = XMLHttpRequest.prototype.open;
+      XMLHttpRequest.prototype.open = function (...args) {
+        this.addEventListener("load", function () {
+          try {
+            const m = this.responseText.match(/https?:\/\/[^\s"'\\]+/);
+            if (m) window.__REAL_URL__ = m[0];
+          } catch (e) {}
+        });
+        return open.apply(this, args);
+      };
+    });
+
+    // 4. Hook video.src
+    await page.evaluateOnNewDocument(() => {
+      Object.defineProperty(HTMLMediaElement.prototype, "src", {
+        set(v) {
+          window.__REAL_URL__ = v;
+        }
+      });
+    });
+
+    // 5. Hook HLS.js loadSource
+    await page.evaluateOnNewDocument(() => {
+      window.Hls = window.Hls || {};
+      const orig = window.Hls.loadSource;
+      window.Hls.loadSource = function (url) {
+        window.__REAL_URL__ = url;
+        return orig.call(this, url);
+      };
+    });
+
     await page.goto(targetUrl, { waitUntil: "networkidle2" });
 
-    await page.waitForTimeout(5000);
+    await page.waitForTimeout(6000);
+
+    // 6. 从页面变量取
+    const injected = await page.evaluate(() => window.__REAL_URL__);
 
     await browser.close();
+
+    if (injected && !realUrl) realUrl = injected;
 
     if (!realUrl) return res.json({ error: "cannot extract real url" });
 
