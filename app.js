@@ -29,15 +29,14 @@ app.get('/parse', async (req, res) => {
         const url = response.url();
         const type = response.request().resourceType();
 
+        // 直接命中 mp4/m3u8
         if (!realUrl && (url.includes(".mp4") || url.includes(".m3u8"))) {
           realUrl = url;
+          return;
         }
 
-        if (!realUrl && type === "media") {
-          realUrl = url;
-        }
-
-        if (!realUrl && type === "xhr") {
+        // 命中 JSON XHR
+        if (!realUrl && type === "xhr" && url.includes("/api/")) {
           const text = await response.text();
           const match = text.match(/https?:\/\/[^\s"'\\]+/);
           if (match) realUrl = match[0];
@@ -46,7 +45,7 @@ app.get('/parse', async (req, res) => {
       } catch (e) {}
     });
 
-    await page.goto(targetUrl, { waitUntil: "networkidle0" });
+    await page.goto(targetUrl, { waitUntil: "networkidle2" });
 
     await page.waitForTimeout(5000);
 
