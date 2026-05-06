@@ -1,5 +1,5 @@
 const express = require("express");
-const puppeteer = require("puppeteer");
+const puppeteer = require("puppeteer-core");
 
 const app = express();
 const port = 51888;
@@ -11,6 +11,7 @@ app.get("/", async (req, res) => {
     try {
         const browser = await puppeteer.launch({
             headless: true,
+            executablePath: "/usr/bin/google-chrome",   // 指定容器里的 Chrome
             args: [
                 "--no-sandbox",
                 "--disable-setuid-sandbox",
