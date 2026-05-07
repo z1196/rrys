@@ -45,13 +45,6 @@ RUN npm install
 
 COPY . /app
 
-RUN mkdir -p /app-template
-RUN cp /app/app.js /app-template/app.js
-
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-
 EXPOSE 51888
 
-ENTRYPOINT ["/entrypoint.sh"]
 CMD ["node", "app.js"]
