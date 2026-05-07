@@ -6,7 +6,7 @@ const PORT = 51888;
 
 app.get('/parse', async (req, res) => {
   const targetUrl = req.query.url;
-  if (!targetUrl) return res.json({ error: "missing url" });
+  if (!targetUrl) return res.send("missing url");
 
   try {
     const browser = await puppeteer.launch({
@@ -24,31 +24,37 @@ app.get('/parse', async (req, res) => {
 
     let realUrl = null;
 
-    // 1. 监听所有 response
-    page.on("response", async (response) => {
-      try {
-        const url = response.url();
-        const type = response.request().resourceType();
+    // ====== 立即捕获到就返回 ======
+    const resolveWhenFound = new Promise(resolve => {
+      page.on("response", async (response) => {
+        try {
+          const url = response.url();
+          const type = response.request().resourceType();
 
-        if (!realUrl && (url.includes(".mp4") || url.includes(".m3u8"))) {
-          realUrl = url;
-        }
+          if (!realUrl && (url.includes(".mp4") || url.includes(".m3u8"))) {
+            realUrl = url;
+            resolve();
+          }
 
-        if (!realUrl && type === "media") {
-          realUrl = url;
-        }
+          if (!realUrl && type === "media") {
+            realUrl = url;
+            resolve();
+          }
 
-        const ct = response.headers()["content-type"] || "";
-        if (!realUrl && ct.includes("application/json")) {
-          const text = await response.text();
-          const match = text.match(/https?:\/\/[^\s"'\\]+/);
-          if (match) realUrl = match[0];
-        }
-
-      } catch (e) {}
+          const ct = response.headers()["content-type"] || "";
+          if (!realUrl && ct.includes("application/json")) {
+            const text = await response.text();
+            const match = text.match(/https?:\/\/[^\s"'\\]+/);
+            if (match) {
+              realUrl = match[0];
+              resolve();
+            }
+          }
+        } catch (e) {}
+      });
     });
 
-    // 2. Hook fetch
+    // Hook fetch
     await page.evaluateOnNewDocument(() => {
       const origFetch = window.fetch;
       window.fetch = async (...args) => {
@@ -61,7 +67,7 @@ app.get('/parse', async (req, res) => {
       };
     });
 
-    // 3. Hook XHR
+    // Hook XHR
     await page.evaluateOnNewDocument(() => {
       const open = XMLHttpRequest.prototype.open;
       XMLHttpRequest.prototype.open = function (...args) {
@@ -75,7 +81,7 @@ app.get('/parse', async (req, res) => {
       };
     });
 
-    // 4. Hook video.src
+    // Hook video.src
     await page.evaluateOnNewDocument(() => {
       Object.defineProperty(HTMLMediaElement.prototype, "src", {
         set(v) {
@@ -84,7 +90,7 @@ app.get('/parse', async (req, res) => {
       });
     });
 
-    // 5. Hook HLS.js loadSource
+    // Hook HLS.js
     await page.evaluateOnNewDocument(() => {
       window.Hls = window.Hls || {};
       const orig = window.Hls.loadSource;
@@ -96,21 +102,24 @@ app.get('/parse', async (req, res) => {
 
     await page.goto(targetUrl, { waitUntil: "networkidle2" });
 
-    await page.waitForTimeout(6000);
+    // ====== 超时机制（8 秒） ======
+    await Promise.race([
+      resolveWhenFound,
+      new Promise(r => setTimeout(r, 8000))
+    ]);
 
-    // 6. 从页面变量取
     const injected = await page.evaluate(() => window.__REAL_URL__);
 
     await browser.close();
 
     if (injected && !realUrl) realUrl = injected;
 
-    if (!realUrl) return res.json({ error: "cannot extract real url" });
+    if (!realUrl) return res.send("cannot extract real url");
 
     return res.send(realUrl);
 
   } catch (err) {
-    return res.json({ error: err.message });
+    return res.send(err.message);
   }
 });
 
