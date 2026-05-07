@@ -1,9 +1,9 @@
-FROM ubuntu:24.04
+FROM debian:bookworm
 
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt update && apt install -y \
-    chromium-browser \
+    chromium \
     nodejs \
     npm \
     libasound2 \
