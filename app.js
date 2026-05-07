@@ -1,52 +1,119 @@
-const express = require("express");
-const puppeteer = require("puppeteer-core");
+const express = require('express');
+const puppeteer = require('puppeteer-core');
 
 const app = express();
-const port = 51888;
+const PORT = 51888;
 
-app.get("/", async (req, res) => {
-    const url = req.query.url;
-    if (!url) return res.send("缺少 url 参数");
+app.get('/parse', async (req, res) => {
+  const targetUrl = req.query.url;
+  if (!targetUrl) return res.json({ error: "missing url" });
 
-    try {
-        const browser = await puppeteer.launch({
-            headless: true,
-            executablePath: "/usr/bin/chromium",   // 使用容器内的 Chromium
-            args: [
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-                "--disable-dev-shm-usage",
-                "--disable-gpu",
-                "--no-zygote",
-                "--single-process"
-            ]
+  try {
+    const browser = await puppeteer.launch({
+      headless: "new",
+      executablePath: "/usr/bin/google-chrome",
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-gpu",
+        "--disable-dev-shm-usage"
+      ]
+    });
+
+    const page = await browser.newPage();
+
+    let realUrl = null;
+
+    // 1. 监听所有 response
+    page.on("response", async (response) => {
+      try {
+        const url = response.url();
+        const type = response.request().resourceType();
+
+        if (!realUrl && (url.includes(".mp4") || url.includes(".m3u8"))) {
+          realUrl = url;
+        }
+
+        if (!realUrl && type === "media") {
+          realUrl = url;
+        }
+
+        const ct = response.headers()["content-type"] || "";
+        if (!realUrl && ct.includes("application/json")) {
+          const text = await response.text();
+          const match = text.match(/https?:\/\/[^\s"'\\]+/);
+          if (match) realUrl = match[0];
+        }
+
+      } catch (e) {}
+    });
+
+    // 2. Hook fetch
+    await page.evaluateOnNewDocument(() => {
+      const origFetch = window.fetch;
+      window.fetch = async (...args) => {
+        const res = await origFetch(...args);
+        res.clone().text().then(t => {
+          const m = t.match(/https?:\/\/[^\s"'\\]+/);
+          if (m) window.__REAL_URL__ = m[0];
         });
+        return res;
+      };
+    });
 
-        const page = await browser.newPage();
-        await page.goto(url, { waitUntil: "networkidle2" });
-
-        let realUrl = "";
-
-        page.on("response", async (response) => {
-            const reqUrl = response.url();
-            if (reqUrl.includes(".mp4") || reqUrl.includes(".m3u8")) {
-                realUrl = reqUrl;
-            }
+    // 3. Hook XHR
+    await page.evaluateOnNewDocument(() => {
+      const open = XMLHttpRequest.prototype.open;
+      XMLHttpRequest.prototype.open = function (...args) {
+        this.addEventListener("load", function () {
+          try {
+            const m = this.responseText.match(/https?:\/\/[^\s"'\\]+/);
+            if (m) window.__REAL_URL__ = m[0];
+          } catch (e) {}
         });
+        return open.apply(this, args);
+      };
+    });
 
-        // 等待资源加载
-        await page.waitForTimeout(5000);
-        await browser.close();
+    // 4. Hook video.src
+    await page.evaluateOnNewDocument(() => {
+      Object.defineProperty(HTMLMediaElement.prototype, "src", {
+        set(v) {
+          window.__REAL_URL__ = v;
+        }
+      });
+    });
 
-        if (!realUrl) return res.send("未找到播放链接");
+    // 5. Hook HLS.js loadSource
+    await page.evaluateOnNewDocument(() => {
+      window.Hls = window.Hls || {};
+      const orig = window.Hls.loadSource;
+      window.Hls.loadSource = function (url) {
+        window.__REAL_URL__ = url;
+        return orig.call(this, url);
+      };
+    });
 
-        return res.send(realUrl);
+    await page.goto(targetUrl, { waitUntil: "networkidle2" });
 
-    } catch (err) {
-        return res.send("解析失败：" + err.message);
-    }
+    await page.waitForTimeout(6000);
+
+    // 6. 从页面变量取
+    const injected = await page.evaluate(() => window.__REAL_URL__);
+
+    await browser.close();
+
+    if (injected && !realUrl) realUrl = injected;
+
+    if (!realUrl) return res.json({ error: "cannot extract real url" });
+
+    return res.json({ realUrl });
+
+  } catch (err) {
+    return res.json({ error: err.message });
+  }
 });
 
-app.listen(port, () => {
-    console.log(`RRYS Parser running on port ${port}`);
+app.listen(PORT, "0.0.0.0", () => {
+  console.log("rrys parser running on", PORT);
 });
