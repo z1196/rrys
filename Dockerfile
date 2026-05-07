@@ -38,13 +38,18 @@ RUN apt update && apt install -y \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
+WORKDIR /opt/rrys
 
-COPY package.json /app/package.json
-RUN npm install
+# ⭐ 镜像内放一份 app.js 模板
+COPY app.js /opt/rrys-template/app.js
 
-COPY . /app
+# ⭐ 安装依赖（只在镜像里）
+COPY package.json /opt/rrys-template/package.json
+RUN cd /opt/rrys-template && npm install
 
-EXPOSE 51888
+# ⭐ 复制 entrypoint.sh
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["node", "app.js"]
