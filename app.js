@@ -10,18 +10,18 @@ app.get('/parse', async (req, res) => {
 
   try {
     const browser = await puppeteer.launch({
-      headless: false,
+      headless: "new",
       executablePath: "/usr/bin/chromium",
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
-        "--enable-webgl",
-        "--ignore-gpu-blocklist",
-        "--disable-blink-features=AutomationControlled",
+        "--disable-gpu",
         "--disable-dev-shm-usage",
-        "--enable-features=NetworkService,NetworkServiceInProcess",
-        "--allow-running-insecure-content",
-        "--disable-web-security"
+        "--disable-blink-features=AutomationControlled",
+        "--ignore-gpu-blocklist",
+        "--enable-webgl",
+        "--disable-web-security",
+        "--allow-running-insecure-content"
       ]
     });
 
@@ -48,7 +48,7 @@ app.get('/parse', async (req, res) => {
 
     await page.goto(targetUrl, { waitUntil: "networkidle2", timeout: 30000 });
 
-    await page.waitForTimeout(6000);
+    await page.waitForTimeout(5000);
 
     await browser.close();
 
