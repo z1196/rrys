@@ -45,7 +45,8 @@ RUN npm install
 
 COPY . /app
 
-COPY app.js /app-template/app.js
+RUN mkdir -p /app-template
+RUN cp /app/app.js /app-template/app.js
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
