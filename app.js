@@ -10,14 +10,18 @@ app.get('/parse', async (req, res) => {
 
   try {
     const browser = await puppeteer.launch({
-      headless: "new",
+      headless: false,
       executablePath: "/usr/bin/chromium-browser",
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
-        "--disable-gpu",
+        "--enable-webgl",
+        "--ignore-gpu-blocklist",
+        "--disable-blink-features=AutomationControlled",
         "--disable-dev-shm-usage",
-        "--disable-blink-features=AutomationControlled"
+        "--enable-features=NetworkService,NetworkServiceInProcess",
+        "--allow-running-insecure-content",
+        "--disable-web-security"
       ]
     });
 
@@ -36,21 +40,19 @@ app.get('/parse', async (req, res) => {
     page.on("response", async (resp) => {
       try {
         const url = resp.url();
-
         if (!realUrl && (url.includes(".mp4") || url.includes(".m3u8"))) {
           realUrl = url;
         }
-
       } catch {}
     });
 
     await page.goto(targetUrl, { waitUntil: "networkidle2", timeout: 30000 });
 
-    await page.waitForTimeout(5000);
+    await page.waitForTimeout(6000);
 
     await browser.close();
 
-    if (!realUrl) return res.send("cannot extract real url (headless mode)");
+    if (!realUrl) return res.send("cannot extract real url");
 
     return res.send(realUrl);
 
