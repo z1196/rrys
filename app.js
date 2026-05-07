@@ -11,7 +11,7 @@ app.get('/parse', async (req, res) => {
   try {
     const browser = await puppeteer.launch({
       headless: false,
-      executablePath: "/usr/bin/chromium-browser",
+      executablePath: "/usr/bin/chromium",
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
