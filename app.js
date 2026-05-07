@@ -107,7 +107,7 @@ app.get('/parse', async (req, res) => {
 
     if (!realUrl) return res.json({ error: "cannot extract real url" });
 
-    return res.json({ realUrl });
+    return res.send(realUrl);
 
   } catch (err) {
     return res.json({ error: err.message });
