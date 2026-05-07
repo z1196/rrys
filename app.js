@@ -36,17 +36,11 @@ app.get('/parse', async (req, res) => {
     page.on("response", async (resp) => {
       try {
         const url = resp.url();
-        const ct = resp.headers()["content-type"] || "";
 
         if (!realUrl && (url.includes(".mp4") || url.includes(".m3u8"))) {
           realUrl = url;
         }
 
-        if (!realUrl && ct.includes("application/json")) {
-          const text = await resp.text();
-          const m = text.match(/https?:\/\/[^\s"'\\]+/);
-          if (m) realUrl = m[0];
-        }
       } catch {}
     });
 
