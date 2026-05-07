@@ -26,7 +26,7 @@ jobs:
 
       - name: Start server
         run: |
-          node app.js &
+          node app-test.js &
           sleep 8
 
       - name: Test parser
