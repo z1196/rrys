@@ -1,0 +1,9 @@
+services:
+  rrys:
+    image: zht98/rrys-parser:latest
+    container_name: rrys-parser
+    restart: always
+    ports:
+      - "51888:51888"
+    volumes:
+      - ./app.js:/app/app.js
